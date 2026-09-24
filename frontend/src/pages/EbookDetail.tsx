@@ -9,18 +9,45 @@ import {
   Avatar,
   message,
   Spin,
+  Progress,
 } from 'antd'
+import { useSelector } from 'react-redux'
 import { ebookApi } from '../api/ebook'
-import type { Ebook } from '../types'
+import type { Ebook, ReadingProgress } from '../types'
+import type { RootState } from '../store'
 
 const { Title, Paragraph } = Typography
+
+interface GuestProgress {
+  currentPage: number
+  bookmarks: number[]
+}
+
+function readGuestProgress(id: string): GuestProgress | null {
+  try {
+    const raw = localStorage.getItem(`reading-progress-guest:${id}`)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return {
+        currentPage: Number(parsed.currentPage) || 1,
+        bookmarks: Array.isArray(parsed.bookmarks) ? parsed.bookmarks : [],
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
 
 function EbookDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const isLoggedIn = useSelector((state: RootState) => !!state.auth.token)
   const [ebook, setEbook] = useState<Ebook | null>(null)
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
+  const [progress, setProgress] = useState<ReadingProgress | null>(null)
+  const [guestProgress, setGuestProgress] = useState<GuestProgress | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -33,7 +60,19 @@ function EbookDetail() {
     setLoading(true)
     try {
       const res = await ebookApi.getById(id)
-      setEbook(res.data?.data || res.data)
+      const book: Ebook = res.data?.data || res.data
+      setEbook(book)
+
+      if (isLoggedIn) {
+        try {
+          const progressRes = await ebookApi.getProgress(id)
+          setProgress(progressRes.data?.data ?? null)
+        } catch {
+          // 进度查询失败不影响详情页展示
+        }
+      } else {
+        setGuestProgress(readGuestProgress(id))
+      }
     } catch (error) {
       console.error('Failed to load ebook:', error)
     } finally {
@@ -57,6 +96,13 @@ function EbookDetail() {
   if (loading || !ebook) {
     return <Spin style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
   }
+
+  const totalPages = ebook.pageCount || 100
+  const savedPage = progress?.currentPage ?? guestProgress?.currentPage
+  const readPercent = progress?.progressPercent
+    ?? (savedPage ? Math.min(100, Math.round((savedPage / totalPages) * 100)) : 0)
+  const bookmarkCount = progress?.bookmarks?.length ?? guestProgress?.bookmarks?.length ?? 0
+  const hasProgress = !!savedPage && savedPage > 1
 
   return (
     <div>
@@ -102,12 +148,46 @@ function EbookDetail() {
                 ¥{ebook.price}
               </Descriptions.Item>
             </Descriptions>
+
+            <div
+              style={{
+                marginTop: 16,
+                padding: 16,
+                background: '#fafafa',
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>
+                {hasProgress ? (
+                  <>
+                    <span>
+                      已读 {readPercent}% · 读到第 {savedPage} / {totalPages} 页
+                      {bookmarkCount > 0 ? ` · ${bookmarkCount} 个书签` : ''}
+                    </span>
+                    {!isLoggedIn && (
+                      <Tag color="default" style={{ marginLeft: 8 }}>
+                        本机记录
+                      </Tag>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: '#999' }}>暂无阅读记录</span>
+                )}
+              </div>
+              <Progress percent={readPercent} size="small" />
+            </div>
+
             <div style={{ marginTop: 24, gap: 12, display: 'flex' }}>
               <Button type="primary" size="large" onClick={handlePurchase} loading={purchasing}>
                 立即购买
               </Button>
-              <Button size="large" onClick={() => navigate(`/ebooks/read/${ebook.id}`)}>
-                免费试读
+              <Button
+                size="large"
+                type={hasProgress ? 'primary' : 'default'}
+                ghost={hasProgress}
+                onClick={() => navigate(`/ebooks/read/${ebook.id}`)}
+              >
+                {hasProgress ? `继续阅读（第 ${savedPage} 页）` : '免费试读'}
               </Button>
             </div>
           </div>
