@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: knowledge-platform
+
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://admin:admin123@localhost:2804/knowledge_platform?authSource=admin}
+      database: ${SPRING_DATA_MONGODB_DATABASE:knowledge_platform}
+
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6415}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
+      timeout: 10000ms
+
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+jwt:
+  secret: ${JWT_SECRET:your_super_secret_jwt_key_must_be_at_least_256_bits_long}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+minio:
+  url: ${MINIO_URL:http://localhost:9013}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: knowledge-platform
+
+alipay:
+  app-id: ${ALIPAY_APP_ID:}
+  private-key: ${ALIPAY_PRIVATE_KEY:}
+  public-key: ${ALIPAY_PUBLIC_KEY:}
+  gateway: ${ALIPAY_GATEWAY:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  notify-url: ${ALIPAY_NOTIFY_URL:}
+  return-url: ${ALIPAY_RETURN_URL:}
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:3000}
+
+logging:
+  level:
+    com.knowledge.platform: DEBUG
+    org.springframework.security: DEBUG

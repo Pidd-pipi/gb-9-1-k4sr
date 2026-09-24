@@ -1,0 +1,120 @@
+version: '3.8'
+
+networks:
+  knowledge-platform:
+    driver: bridge
+
+volumes:
+  mongodb-data:
+  redis-data:
+  minio-data:
+
+services:
+  mongodb:
+    container_name: knowledge-platform-mongodb
+    image: mongo:6.0
+    restart: unless-stopped
+    ports:
+      - "2804:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-knowledge_platform}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+    volumes:
+      - mongodb-data:/data/db
+      - ./database/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - knowledge-platform
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    container_name: knowledge-platform-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6415:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis123}", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - knowledge-platform
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    container_name: knowledge-platform-minio
+    image: minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - "9013:9000"
+      - "9014:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - knowledge-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    container_name: knowledge-platform-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3015:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017/${MONGO_DB_NAME:-knowledge_platform}?authSource=admin
+      SPRING_DATA_MONGODB_DATABASE: ${MONGO_DB_NAME:-knowledge_platform}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      JWT_SECRET: ${JWT_SECRET:-your_super_secret_jwt_key_must_be_at_least_256_bits_long}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      FRONTEND_URL: http://localhost:8015
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - knowledge-platform
+
+  frontend:
+    container_name: knowledge-platform-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8015:80"
+    depends_on:
+      - backend
+    networks:
+      - knowledge-platform
