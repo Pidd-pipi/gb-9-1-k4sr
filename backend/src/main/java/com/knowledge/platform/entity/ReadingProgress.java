@@ -6,6 +6,8 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Document(collection = "reading_progress")
@@ -21,6 +23,17 @@ public class ReadingProgress {
     private Integer currentPage = 1;
 
     private Double progressPercent = 0.0;
+
+    /**
+     * 书签页码列表
+     */
+    private List<Integer> bookmarks = new ArrayList<>();
+
+    /**
+     * 阅读记录版本号，每次成功保存递增。
+     * 保存请求必须带上打开时获取到的版本号，服务端据此做乐观锁冲突检测。
+     */
+    private Long version = 0L;
 
     private LocalDateTime updatedAt;
 }

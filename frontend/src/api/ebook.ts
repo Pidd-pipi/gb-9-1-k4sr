@@ -11,4 +11,12 @@ export const ebookApi = {
   purchase: (id: string) => api.post(`/ebooks/${id}/purchase`),
 
   create: (data: any) => api.post('/ebooks', data),
+
+  getReadingProgress: (id: string) =>
+    api.get(`/ebooks/${id}/reading-progress`),
+
+  saveReadingProgress: (
+    id: string,
+    data: { currentPage: number; bookmarks: number[]; version: number }
+  ) => api.put(`/ebooks/${id}/reading-progress`, data, { silentAuth: true }),
 }

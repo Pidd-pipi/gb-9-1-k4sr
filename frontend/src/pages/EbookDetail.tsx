@@ -7,18 +7,21 @@ import {
   Descriptions,
   Tag,
   Avatar,
+  Progress,
   message,
   Spin,
+  Space,
 } from 'antd'
 import { ebookApi } from '../api/ebook'
-import type { Ebook } from '../types'
+import type { Ebook, ReadingProgress } from '../types'
 
-const { Title, Paragraph } = Typography
+const { Title, Paragraph, Text } = Typography
 
 function EbookDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [ebook, setEbook] = useState<Ebook | null>(null)
+  const [progress, setProgress] = useState<ReadingProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
 
@@ -33,7 +36,38 @@ function EbookDetail() {
     setLoading(true)
     try {
       const res = await ebookApi.getById(id)
-      setEbook(res.data?.data || res.data)
+      const data: Ebook = res.data?.data || res.data
+      setEbook(data)
+
+      if (localStorage.getItem('token')) {
+        try {
+          const progressRes = await ebookApi.getReadingProgress(id)
+          setProgress(progressRes.data?.data ?? null)
+        } catch (error) {
+          console.error('Failed to load reading progress:', error)
+        }
+      } else if (data.pageCount) {
+        // 未登录用户展示本机保留的已读比例
+        try {
+          const raw = localStorage.getItem(`reading-progress:${id}`)
+          const local = raw ? JSON.parse(raw) : null
+          if (local?.currentPage) {
+            setProgress({
+              id: '',
+              userId: '',
+              ebookId: id,
+              currentPage: local.currentPage,
+              progressPercent:
+                Math.round((local.currentPage * 1000) / data.pageCount) / 10,
+              bookmarks: Array.isArray(local.bookmarks) ? local.bookmarks : [],
+              version: 0,
+              updatedAt: '',
+            })
+          }
+        } catch {
+          // 本机记录不可用时忽略
+        }
+      }
     } catch (error) {
       console.error('Failed to load ebook:', error)
     } finally {
@@ -57,6 +91,9 @@ function EbookDetail() {
   if (loading || !ebook) {
     return <Spin style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
   }
+
+  const readPercent = progress?.progressPercent || 0
+  const hasProgress = !!progress && (progress.currentPage > 1 || readPercent > 0)
 
   return (
     <div>
@@ -102,12 +139,27 @@ function EbookDetail() {
                 ¥{ebook.price}
               </Descriptions.Item>
             </Descriptions>
+            {hasProgress && (
+              <div style={{ marginTop: 16, maxWidth: 480 }}>
+                <Space style={{ marginBottom: 4 }}>
+                  <Text strong>已读 {readPercent}%</Text>
+                  <Text type="secondary">
+                    上次读到第 {progress?.currentPage}
+                    {ebook.pageCount ? ` / ${ebook.pageCount}` : ''} 页
+                    {progress?.bookmarks?.length
+                      ? ` · ${progress.bookmarks.length} 个书签`
+                      : ''}
+                  </Text>
+                </Space>
+                <Progress percent={readPercent} status="active" />
+              </div>
+            )}
             <div style={{ marginTop: 24, gap: 12, display: 'flex' }}>
               <Button type="primary" size="large" onClick={handlePurchase} loading={purchasing}>
                 立即购买
               </Button>
               <Button size="large" onClick={() => navigate(`/ebooks/read/${ebook.id}`)}>
-                免费试读
+                {hasProgress ? '继续阅读' : '免费试读'}
               </Button>
             </div>
           </div>

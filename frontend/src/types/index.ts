@@ -90,6 +90,17 @@ export interface Ebook {
   createdAt: string
 }
 
+export interface ReadingProgress {
+  id: string
+  userId: string
+  ebookId: string
+  currentPage: number
+  progressPercent: number
+  bookmarks: number[]
+  version: number
+  updatedAt: string
+}
+
 export interface Order {
   id: string
   orderNo: string
